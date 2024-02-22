@@ -1,0 +1,142 @@
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+	<entry key="getConfiguration"><![CDATA[
+		SELECT cancel_percent_rate cancelPercentRate,
+		       inverse_buy   inverseBuy,
+		       arr_rates	arrRates
+		FROM   configuration 
+		]]>
+	</entry>
+	<entry key="getDailyPositions"><![CDATA[
+		SELECT symbol,
+		       quantity,
+		       acctType
+		FROM   daily_position
+		WHERE  acctType = :acctType
+		]]>
+	</entry>
+	<entry key="getOperations"><![CDATA[
+		WITH tbl AS 
+			(SELECT   symbol,
+		         buyprice,
+		         Rank() over (partition BY symbol ORDER BY buyprice DESC) AS rk,
+		         cashAmt,
+		         acctType,
+		         rank,
+		         cashAmt DIV buyprice AS numOfShare
+		FROM     operation
+		WHERE    acctType = :acctType )
+		SELECT t.symbol, t.buyPrice, t.cashAmt,
+		         t.numOfShare, rank,
+		         (SELECT SUM(x.numOfShare)
+		            FROM tbl x
+		           WHERE x.rk <= t.rk AND x.symbol=t.symbol ) AS totalNumOfShare
+		    FROM tbl t
+		ORDER BY t.symbol, t.rk
+		]]>
+	</entry>
+	<entry key="saveOperations"><![CDATA[
+		INSERT INTO operation
+		            (symbol,
+		             buyprice,
+		             cashamt,
+		             accttype,
+		             rank)
+		VALUES      (:symbol,
+		             :buyPrice,
+		             :cashAmt,
+		             :acctType,
+		             :rank)  
+		]]>
+	</entry>
+	<entry key="updateDailyPositions"><![CDATA[
+		INSERT INTO daily_position
+		            (
+		                        symbol,
+		                        quantity,
+		                        acctType
+		            )
+		            VALUES
+		            (
+		                        :symbol,
+		                        :quantity,
+		                        :acctType
+		            )
+		on duplicate KEY
+		UPDATE quantity=quantity+(:quantity)
+		]]>
+	</entry>
+	
+	<entry key="saveInitialPositions"><![CDATA[
+		INSERT IGNORE INTO initial_position
+		            (symbol,
+		             quantity,
+		             acctType)
+		VALUES      (:symbol,
+		             :quantity,
+		             :acctType) 
+		]]>
+	</entry>
+	<entry key="getStockAccts"><![CDATA[
+		SELECT acctId,
+			   acctIdKey,
+		       acctType,
+		       description
+		FROM   stock_account
+		]]>
+	</entry>
+	<entry key="getInitialPositions"><![CDATA[
+		SELECT symbol,
+		       quantity,
+		       acctType
+		FROM   initial_position
+		WHERE  acctType = :acctType
+		]]>
+	</entry>
+	<entry key="deleteDailyPosition"><![CDATA[
+		delete from daily_position where acctType=:acctType
+		]]>
+	</entry>
+	<entry key="deleteOperation"><![CDATA[
+		delete from operation
+		]]>
+	</entry>
+	<entry key="deleteInitialPosition"><![CDATA[
+		delete from initial_position where acctType=:acctType
+		]]>
+	</entry>
+	<entry key="getTranches"><![CDATA[
+		SELECT symbol,
+		       code,
+		       amt
+		FROM   tranche
+		WHERE  accttype = :acctType
+		]]>
+	</entry>
+	<entry key="getClosePrices"><![CDATA[
+		SELECT symbol,
+		       close_price closePrice
+		FROM   close_price
+		]]>
+	</entry>
+	<entry key="updateAmt"><![CDATA[
+		UPDATE operation
+		SET    cashamt = cashamt + ( :accrue )
+		WHERE  accttype = :accttype
+		       AND symbol = :symbol
+		       AND rank = :rank
+		]]>
+	</entry>
+	<entry key="getRank"><![CDATA[
+		SELECT rank
+		FROM   operation
+		WHERE  symbol = :symbol
+		       AND accttype = :accttype
+		       AND Abs(buyprice - ( :buyprice )) = (SELECT Min(Abs(
+		                                           buyprice - ( :buyprice )))
+		                                            FROM   operation
+		                                            WHERE  symbol = :symbol
+		                                                   AND accttype = :accttype) 
+		]]>
+	</entry>
+</properties>
